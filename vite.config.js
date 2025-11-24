@@ -114,10 +114,11 @@ if (host === "localhost") {
 
 export default defineConfig({
   server: {
-    allowedHosts: [host],
-    cors: {
-      preflightContinue: true,
-    },
+  allowedHosts: [host, ".ngrok-free.app"], // ✅ Allow all ngrok subdomains
+  cors: {
+    preflightContinue: true,
+  },
+ 
     port: Number(process.env.PORT || 3000),
     hmr: hmrConfig,
     fs: {

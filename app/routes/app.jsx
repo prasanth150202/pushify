@@ -61,7 +61,8 @@ export default function App() {
         <Link to="/app/additional">Campaign Builder</Link>
         <Link to="/app/editor">Templates Creation</Link>
         <Link to="/app/templateslib">Templates Library</Link>
-        <Link to="/app/customui">Cuztomize UI</Link>
+        <Link to="/app/customui">Customize UI</Link>
+        <Link to="/app/plan">Plans</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

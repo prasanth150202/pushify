@@ -504,13 +504,66 @@ export default function ConditionBuilder() {
     };
 
     try {
+      console.log("[SendCampaign] building payload", payload);
+      // --- AES-256-CBC helpers (browser) using passphrases (must match PHP) ---
+      const bytesToBase64 = (bytes) =>
+        btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(bytes))));
+      const base64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const textToBytes = (txt) => new TextEncoder().encode(txt);
+      const sha256 = async (data) => {
+        const buf = await crypto.subtle.digest("SHA-256", typeof data === "string" ? textToBytes(data) : data);
+        return new Uint8Array(buf);
+      };
+      const deriveKeyIv = async (keyPass, ivPass) => {
+        const keyHash = await sha256(keyPass); // 32 bytes
+        const ivHash = await sha256(ivPass); // 32 bytes; take first 16
+        const iv = ivHash.slice(0, 16);
+        const key = await crypto.subtle.importKey("raw", keyHash, { name: "AES-CBC" }, false, [
+          "encrypt",
+          "decrypt",
+        ]);
+        return { key, iv };
+      };
+      const encryptJson = async (obj, keyPass, ivPass) => {
+        const { key, iv } = await deriveKeyIv(keyPass, ivPass);
+        const encoded = new TextEncoder().encode(JSON.stringify(obj));
+        const cipherBuf = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, encoded);
+        return bytesToBase64(cipherBuf);
+      };
+      const decryptToJson = async (cipherB64, keyPass, ivPass) => {
+        const { key, iv } = await deriveKeyIv(keyPass, ivPass);
+        const cipherBytes = base64ToBytes(cipherB64);
+        const plainBuf = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, key, cipherBytes);
+        const text = new TextDecoder().decode(plainBuf);
+        return JSON.parse(text);
+      };
+
+      // IMPORTANT: Use the same passphrases as PHP config
+      const AES_PASSPHRASE = "CHANGE_ME_STRONG_PASSPHRASE";
+      const AES_IV_SALT = "CHANGE_ME_IV_SALT";
+
+      const ciphertext = await encryptJson(payload, AES_PASSPHRASE, AES_IV_SALT);
+      console.log("[SendCampaign] ciphertext length", ciphertext?.length);
+
       const res = await fetch("/api/sendcamp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+          "X-Encrypted": "1",
+        },
+        body: JSON.stringify({ ciphertext }),
       });
 
-      const data = await res.json();
+      console.log("[SendCampaign] response status", res.status);
+      const wire = await res.json();
+      console.log("[SendCampaign] response body", wire && wire.ciphertext ? `{ciphertext len=${wire.ciphertext.length}}` : wire);
+      let data = {};
+      if (wire && wire.ciphertext) {
+        data = await decryptToJson(wire.ciphertext, AES_PASSPHRASE, AES_IV_SALT);
+        console.log("[SendCampaign] decrypted response", data);
+      } else {
+        data = wire;
+      }
       setErrorMsg(""); // clear error
       setIsDirty(false);
       setIsTextDirty(false); // Reset text dirty state
@@ -525,6 +578,7 @@ export default function ConditionBuilder() {
         }, 1200); // Show success for 1.2s before navigating
       }
     } catch (error) {
+      console.error("[SendCampaign] error", error);
       setErrorMsg("Error scheduling campaign");
       setIsLoading(false); // Reset loading on error
     }

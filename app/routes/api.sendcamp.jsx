@@ -3,45 +3,43 @@ import { authenticate } from "../shopify.server"; // your Shopify auth helper
 
 export const action = async ({ request }) => {
   try {
-    // ----------------------------
-    // Authenticate Shopify Admin / Embedded App
-    // ----------------------------
+    
     const { session } = await authenticate.admin(request);
     const shopDomain = session.shop;
 
-    // ----------------------------
-    // Parse JSON body
-    // ----------------------------
+    
     const body = await request.json();
 
-    // Log incoming request
-    console.log("Incoming push template payload:", { ...body, shop: shopDomain });
+    console.log("Incoming push template payload:", { encrypted: !!body?.ciphertext, shop: shopDomain });
 
-    // ----------------------------
-    // Attach shop_domain
-    // ----------------------------
-    const payload = {
-      ...body,
-      shop: shopDomain, // fixed typo shoP -> shop
+    let payload;
+    let headers = {
+      "Content-Type": "application/json",
     };
 
-    // ----------------------------
-    // Send to PHP endpoint
-    // ----------------------------
+    if (body && body.ciphertext) {
+      // passthrough encrypted body, attach shop separately within encrypted payload on client side
+      payload = { ciphertext: body.ciphertext };
+      headers["X-Encrypted"] = "1";
+      headers["X-Shop-Domain"] = shopDomain;
+    } else {
+      payload = {
+        ...body,
+        shop: shopDomain, 
+      };
+    }
+
+    console.log("Forwarding to campaigns.php with headers", headers, "payload keys", body?.ciphertext ? Object.keys({ ciphertext: body.ciphertext }) : Object.keys(payload || {}));
     const response = await fetch(
       "https://api.zingbot.io/push-notify/push-notify/campaigns.php",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(payload),
       }
     );
+    console.log("Remote response status", response.status);
 
-    // ----------------------------
-    // Handle response
-    // ----------------------------
     if (!response.ok) {
       const text = await response.text();
       const errorLog = {
@@ -57,8 +55,13 @@ export const action = async ({ request }) => {
       return json({ success: false, errorLog }, { status: response.status });
     }
 
-    const data = await response.json().catch(() => ({}));
-    return json({ success: true, data });
+    const wire = await response.json().catch(() => ({}));
+    console.log("Remote response body", wire && wire.ciphertext ? `{ciphertext len=${(wire.ciphertext||'').length}}` : wire);
+    // If backend returns ciphertext, pass it through unchanged.
+    if (wire && wire.ciphertext) {
+      return json({ ciphertext: wire.ciphertext });
+    }
+    return json({ success: true, data: wire });
   } catch (err) {
     const errorLog = {
       message: err.message,

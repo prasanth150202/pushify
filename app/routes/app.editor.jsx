@@ -62,21 +62,64 @@ export default function PushTemplateEditor() {
     const payload = { title, body, link, icon: iconUrl || null };
 
     try {
+      // AES-256-CBC helpers (browser) using passphrases (must match PHP)
+      const textToBytes = (txt) => new TextEncoder().encode(txt);
+      const sha256 = async (data) => {
+        const buf = await crypto.subtle.digest("SHA-256", typeof data === "string" ? textToBytes(data) : data);
+        return new Uint8Array(buf);
+      };
+      const bytesToBase64 = (bytes) => btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(bytes))));
+      const deriveKeyIv = async (keyPass, ivPass) => {
+        const keyHash = await sha256(keyPass);
+        const ivHash = await sha256(ivPass);
+        const iv = ivHash.slice(0, 16);
+        const key = await crypto.subtle.importKey("raw", keyHash, { name: "AES-CBC" }, false, ["encrypt"]);
+        return { key, iv };
+      };
+      const encryptJson = async (obj, keyPass, ivPass) => {
+        const { key, iv } = await deriveKeyIv(keyPass, ivPass);
+        const encoded = new TextEncoder().encode(JSON.stringify(obj));
+        const cipherBuf = await crypto.subtle.encrypt({ name: "AES-CBC", iv }, key, encoded);
+        return bytesToBase64(cipherBuf);
+      };
+
+      const AES_PASSPHRASE = "CHANGE_ME_STRONG_PASSPHRASE";
+      const AES_IV_SALT = "CHANGE_ME_IV_SALT";
+
+      console.groupCollapsed("[SendTemplate] encrypt+send debug");
+      console.log("[SendTemplate] plaintext payload", payload);
+      const ciphertext = await encryptJson(payload, AES_PASSPHRASE, AES_IV_SALT);
+      if (!ciphertext) {
+        console.error("[SendTemplate] ciphertext empty");
+        throw new Error("Encryption output empty");
+      }
+      console.log("[SendTemplate] ciphertext length", ciphertext.length);
+
       const res = await fetch("/api/sendtemp", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json", "X-Encrypted": "1" },
+        body: JSON.stringify({ ciphertext }),
       });
 
+      console.log("[SendTemplate] response status", res.status);
       if (res.ok) {
+        const resJson = await res.json().catch(() => ({}));
+        console.log("[SendTemplate] success payload", resJson);
         setToastActive(true);
         setDirty(false);
       } else {
-        alert("Failed to save template");
+        const errorText = await res.text();
+        console.error("[SendTemplate] server rejected payload", {
+          status: res.status,
+          body: errorText,
+        });
+        alert("Failed to save template: " + (errorText || res.status));
       }
     } catch (err) {
-      alert("Error saving template: " + err.message);
+      console.error("[SendTemplate] fatal error", err);
+      alert("Error saving template: " + err?.message);
     } finally {
+      console.groupEnd();
       setSaving(false);
     }
   };

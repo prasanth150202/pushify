@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server"; // adjust path if needed
 import { callInternalAndExternal } from "../utils/parallelRequests.server";
+import crypto from "crypto";
 
 // Handle GET
 export async function loader({ request }) {
@@ -12,6 +13,29 @@ export async function loader({ request }) {
   }
 
   try {
+    // AES-256-CBC helpers (Node) for decrypting template titles if encrypted
+    const AES_PASSPHRASE = "CHANGE_ME_STRONG_PASSPHRASE";
+    const AES_IV_SALT = "CHANGE_ME_IV_SALT";
+    const deriveKeyIv = (passphrase, ivSalt) => {
+      const key = crypto.createHash("sha256").update(passphrase, "utf8").digest(); // 32 bytes
+      const ivFull = crypto.createHash("sha256").update(ivSalt, "utf8").digest();
+      const iv = ivFull.subarray(0, 16);
+      return { key, iv };
+    };
+    const decryptBase64ToUtf8 = (b64) => {
+      try {
+        if (!b64 || typeof b64 !== "string") return b64;
+        const { key, iv } = deriveKeyIv(AES_PASSPHRASE, AES_IV_SALT);
+        const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+        const cipherBuf = Buffer.from(b64, "base64");
+        const part1 = decipher.update(cipherBuf);
+        const part2 = decipher.final();
+        return Buffer.concat([part1, part2]).toString("utf8");
+      } catch {
+        return b64;
+      }
+    };
+
     const res = await fetch(
       `https://api.zingbot.io/push-notify/push-notify/templates.php?shopdomain=${shopDomain}`,
       {
@@ -25,7 +49,12 @@ export async function loader({ request }) {
     }
 
     const data = await res.json();
-    return json({ templates: data.data || [] });
+    const list = Array.isArray(data.data) ? data.data : [];
+    const templates = list.map((tpl) => ({
+      ...tpl,
+      title: decryptBase64ToUtf8(tpl.title),
+    }));
+    return json({ templates });
   } catch (err) {
     console.error("Template fetch failed", err);
     return json({ error: "Failed to fetch templates" }, { status: 500 });
