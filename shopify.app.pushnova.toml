@@ -1,28 +1,24 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "13e0c20a9c3845fbf41a085e979aaab1"
-name = "pushnova"
-application_url = "https://7df4ef1bb599.ngrok-free.app/"
+name = "Push nova"
+application_url = "https://983beb2acb44.ngrok-free.app/"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = false
-include_config_on_deploy = true
 
 [webhooks]
-api_version = "2026-01" 
-
-
-    
+api_version = "2026-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_app_proxy,write_app_proxy,write_products"
+scopes = "read_app_proxy,write_app_proxy,read_checkouts,read_orders,write_products,read_themes"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://7df4ef1bb599.ngrok-free.app/auth/callback" ]
+redirect_urls = [ "https://983beb2acb44.ngrok-free.app/auth/callback" ]
 
 [app_proxy]
 url = "https://api.zingbot.io/push-notify"

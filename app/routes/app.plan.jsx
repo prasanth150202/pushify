@@ -6,7 +6,7 @@ import {
   CalloutCard,
   Text,
   Grid,
-  Divider,  
+  Divider,
   BlockStack,
   Badge,
   Icon
@@ -19,44 +19,85 @@ import { authenticate, STARTER_PLAN, GROWTH_PLAN, PRO_PLAN } from "../shopify.se
 
 
 export async function loader({ request }) {
-  const { billing } = await authenticate.admin(request);
+  const { billing, session } = await authenticate.admin(request);
+  const shop = session.shop;
 
   try {
-    const billingCheck = await billing.require({
-      plans: [STARTER_PLAN, GROWTH_PLAN, PRO_PLAN],
-      isTest: true,
-      onFailure: () => {
-        throw new Error("No active plan");
-      },
-    });
+    // First, fetch plan from PHP database
+    const phpResponse = await fetch(
+      `https://api.zingbot.io/push-notify/push-notify/get_shop_plan.php?shop=${encodeURIComponent(shop)}`
+    );
 
-    const subscription = billingCheck.appSubscriptions[0];
+    let dbPlan = null;
+    if (phpResponse.ok) {
+      const phpData = await phpResponse.json();
+      if (phpData.success && phpData.shop_found) {
+        dbPlan = phpData.plan;
+      }
+    }
 
-    // The REAL Shopify plan name
-    const planName = subscription.lineItems[0].plan.name;
+    // Then check Shopify billing
+    let shopifyPlan = null;
+    try {
+      const billingCheck = await billing.require({
+        plans: [STARTER_PLAN, GROWTH_PLAN, PRO_PLAN],
+        isTest: true,
+        onFailure: () => {
+          throw new Error("No active plan");
+        },
+      });
 
-    // Convert Shopify name → your internal ID
-    const planNameToId = {
-      "Starter Plan": "STARTER_PLAN",
-      "Growth Plan": "GROWTH_PLAN",
-      "Pro Plan": "PRO_PLAN",
-    };
+      const subscription = billingCheck.appSubscriptions[0];
+      const planName = subscription.lineItems[0].plan.name;
 
-    const resolvedPlanId = planNameToId[planName] ?? "FREE_PLAN";
+      // Convert Shopify name → your internal ID
+      const planNameToId = {
+        "Starter Plan": "STARTER_PLAN",
+        "Growth Plan": "GROWTH_PLAN",
+        "Pro Plan": "PRO_PLAN",
+      };
 
-    return json({
-      plan: {
+      const resolvedPlanId = planNameToId[planName] ?? "FREE_PLAN";
+
+      shopifyPlan = {
         name: planName,
         id: resolvedPlanId,
-      },
-    });
-  } catch (error) {
-    if (error.message === "No active plan") {
-      return json({
-        plan: { name: "Free", id: "FREE_PLAN" },
-      });
+      };
+
+      // If we have a Shopify plan but DB plan is different, sync to DB
+      if (dbPlan && dbPlan.id !== resolvedPlanId) {
+        // Update DB to match Shopify
+        await fetch("https://api.zingbot.io/push-notify/push-notify/update_shop_plan.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shop: shop,
+            plan_id: resolvedPlanId,
+            event: "shopify_billing_sync"
+          })
+        });
+      }
+    } catch (error) {
+      if (error.message !== "No active plan") {
+        console.error("Shopify billing check error:", error);
+      }
     }
-    throw error;
+
+    // Priority: Shopify billing > DB plan > Free plan
+    const finalPlan = shopifyPlan || dbPlan || { name: "Free", id: "FREE_PLAN" };
+
+    return json({
+      plan: finalPlan,
+      source: shopifyPlan ? "shopify" : (dbPlan ? "database" : "default"),
+    });
+
+  } catch (error) {
+    console.error("Error in plan loader:", error);
+    return json({
+      plan: { name: "Free", id: "FREE_PLAN" },
+      source: "error_fallback",
+      error: error.message
+    });
   }
 }
 
@@ -78,15 +119,15 @@ let planData = [
       "100 pushes/day",
       "Basic segmentation",
       "Basic automations",
-      "Chrome & Android web push",
-      "Pushnova branding"
+      "Standard delivery",
+      "Basic analytics"
     ]
   },
   {
     title: "Starter",
     description: "For small stores starting engagement",
-    price: "5.99",
-    priceDisplay: "$5.99",
+    price: "9",
+    priceDisplay: "$9",
     period: "/month",
     action: "Upgrade to Starter",
     name: "Starter Plan",
@@ -95,17 +136,18 @@ let planData = [
     popular: false,
     features: [
       "500 pushes/day",
-      "Custom segments",
-      "Remove branding",
-      "Basic analytics",
+      "Basic targeting",
+      "Custom segment support",
+      "Enhanced analytics",
+      "Scheduled push campaigns",
       "Standard delivery"
     ]
   },
   {
     title: "Growth",
     description: "Most popular for growing brands",
-    price: "17.99",
-    priceDisplay: "$17.99",
+    price: "29",
+    priceDisplay: "$29",
     period: "/month",
     action: "Upgrade to Growth",
     name: "Growth Plan",
@@ -114,18 +156,19 @@ let planData = [
     popular: true,
     features: [
       "1,000 pushes/day",
-      "Advanced targeting",
-      "AI-generated content",
-      "A/B testing",
-      "Workflow automation",
-      "Priority delivery"
+      "Advanced segmentation",
+      "AI-generated push content",
+      "Event-based triggers",
+      "Growth-stage analytics & reporting",
+      "API access",
+      "High-priority delivery"
     ]
   },
   {
     title: "Pro",
     description: "For high-volume stores",
-    price: "32.99",
-    priceDisplay: "$32.99",
+    price: "79",
+    priceDisplay: "$79",
     period: "/month",
     action: "Upgrade to Pro",
     name: "Pro Plan",
@@ -133,19 +176,20 @@ let planData = [
     url: "/app/upgrade?plan=PRO_PLAN",
     popular: false,
     features: [
-      "25,000 pushes/day",
+      "Up to 25,000 pushes/day",
       "Full AI suite",
-      "Advanced segmentation",
-      "Real-time analytics",
-      "Multi-device support",
-      "Dedicated support"
+      "Multi-layer triggers & workflows",
+      "Deep analytics + behavior tracking",
+      "API + Webhooks",
+      "Priority delivery servers",
+      "Dedicated support (optional add-on)"
     ]
   },
   {
     title: "Enterprise",
     description: "Custom solutions for large brands",
     price: "custom",
-    priceDisplay: "Custom",
+    priceDisplay: "Contact Sales",
     period: "",
     action: "Contact Sales",
     name: "Enterprise Plan",
@@ -153,12 +197,12 @@ let planData = [
     url: "mailto:sales@pushnova.com?subject=Enterprise Plan Inquiry",
     popular: false,
     features: [
-      "Unlimited pushes",
-      "Custom AI personalization",
-      "SLA-backed uptime",
-      "API + Webhooks",
-      "Integration support",
-      "Account manager"
+      "Custom push/day capacity",
+      "Role-based AI personalization",
+      "SLA-backed delivery uptime",
+      "Full API/Webhook ecosystem",
+      "Engineering-assisted integrations",
+      "Dedicated account manager"
     ]
   },
 ];
@@ -183,13 +227,13 @@ export default function PricingPage() {
 
   const calloutPrimaryAction = isFreePlan
     ? {
-        content: "Upgrade Plan",
-        url: "/app/upgrade?plan=STARTER_PLAN",
-      }
+      content: "Upgrade Plan",
+      url: "/app/upgrade?plan=STARTER_PLAN",
+    }
     : {
-        content: "Cancel Plan",
-        url: "/app/cancel",
-      };
+      content: "Cancel Plan",
+      url: "/app/cancel",
+    };
 
   // Split enterprise out of the main grid
   const enterprisePlan = planData.find((p) => p.id === "ENTERPRISE_PLAN");
@@ -198,7 +242,7 @@ export default function PricingPage() {
   return (
     <Page>
       <ui-title-bar title="Pricing Plans" />
-      
+
       <Box paddingBlockEnd="600">
         <CalloutCard
           title="Current Plan Status"
@@ -220,14 +264,14 @@ export default function PricingPage() {
       {/* Main plans grid (excluding Enterprise) */}
       <Grid>
         {otherPlans.map((plan_item, index) => {
-          const isCurrentPlan = 
-            plan_item.id === resolvedPlanId || 
+          const isCurrentPlan =
+            plan_item.id === resolvedPlanId ||
             plan_item.name === resolvedPlanName;
-          
+
           return (
-            <Grid.Cell key={index} columnSpan={{xs: 6, sm: 6, md: 3, lg: 3, xl: 3}}>
+            <Grid.Cell key={index} columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3, xl: 3 }}>
               <div style={{ height: '100%' }}>
-                <Card 
+                <Card
                   background={isCurrentPlan ? "bg-surface-success" : "bg-surface"}
                   padding="0"
                 >
@@ -241,11 +285,11 @@ export default function PricingPage() {
                           <Badge tone="info">Most Popular</Badge>
                         )}
                       </div>
-                      
+
                       <Text as="p" variant="bodyMd" tone="subdued">
                         {plan_item.description}
                       </Text>
-                      
+
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                         <Text as="span" variant="heading2xl" fontWeight="bold">
                           {plan_item.priceDisplay}
@@ -262,7 +306,7 @@ export default function PricingPage() {
                       <Text as="p" variant="bodyMd" fontWeight="semibold">
                         What's included:
                       </Text>
-                      
+
                       <BlockStack gap="200">
                         {plan_item.features.map((feature, idx) => (
                           <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -284,7 +328,7 @@ export default function PricingPage() {
                         Current Plan
                       </Button>
                     ) : plan_item.url ? (
-                      <Button 
+                      <Button
                         fullWidth
                         primary={plan_item.popular || plan_item.id !== "ENTERPRISE_PLAN"}
                         url={plan_item.url}
@@ -333,7 +377,7 @@ export default function PricingPage() {
                     <Text as="p" variant="bodyMd" fontWeight="semibold">
                       Enterprise features:
                     </Text>
-                    <BlockStack gap="200" style={{ display: 'flex', justifyContent: 'space-between'  , alignItems: 'flex-start',flexDirection: 'column' }}>
+                    <BlockStack gap="200" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexDirection: 'column' }}>
                       {enterprisePlan.features.map((feature, idx) => (
                         <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                           <div style={{ width: 20, minWidth: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

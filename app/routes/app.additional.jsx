@@ -89,9 +89,9 @@ export default function ConditionBuilder() {
   const app = useAppBridge();
   const [searchParams] = useSearchParams();
   const tempId = searchParams.get("temp");
-  const navigate = useNavigate(); // Add this
+  const navigate = useNavigate();
 
-  const [campaignName, setCampaignName] = useState(""); // Added campaign name state
+  const [campaignName, setCampaignName] = useState("");
   const [conditions, setConditions] = useState([
     {
       type: "all_users",
@@ -107,6 +107,68 @@ export default function ConditionBuilder() {
   const [currentConditionIndex, setCurrentConditionIndex] = useState(0);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [audienceCount, setAudienceCount] = useState(null);
+  const [calculatingAudience, setCalculatingAudience] = useState(false);
+
+  // Plan Data State
+  const [planData, setPlanData] = useState(null);
+  const [checkingPlan, setCheckingPlan] = useState(true);
+
+  // Fetch plan details
+  useEffect(() => {
+    const fetchPlan = async () => {
+      try {
+        console.log("Fetching plan...");
+        const res = await fetch("/api/getplan");
+        console.log("Plan response status:", res.status);
+        const data = await res.json();
+        console.log("Plan data:", data);
+        if (data.success) {
+          setPlanData(data);
+        } else {
+          console.error("Plan fetch failed:", data);
+        }
+      } catch (err) {
+        console.error("Error fetching plan:", err);
+      } finally {
+        setCheckingPlan(false);
+      }
+    };
+    fetchPlan();
+  }, []);
+
+  // Fetch Audience Count
+  useEffect(() => {
+    const fetchAudience = async () => {
+      if (!planData?.shop?.domain) return;
+
+      setCalculatingAudience(true);
+      try {
+        const res = await fetch("/api/audience_count", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conditions: conditions
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setAudienceCount(data.count);
+        }
+      } catch (err) {
+        console.error("Error calculating audience:", err);
+      } finally {
+        setCalculatingAudience(false);
+      }
+    };
+
+    // Debounce the call
+    const timer = setTimeout(() => {
+      fetchAudience();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [conditions, selectedProducts, planData]);
 
   // Scheduling
   const [scheduleType, setScheduleType] = useState("immediately");
@@ -157,6 +219,7 @@ export default function ConditionBuilder() {
       }
     }
   }, [templates, tempId]);
+
   function formatToUserTime(utcDateTime) {
     const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     return new Date(utcDateTime).toLocaleString("en-IN", {
@@ -237,55 +300,6 @@ export default function ConditionBuilder() {
     return "This campaign will target " + parts.join("");
   };
 
-  // const getDetailedSummary = () => {
-  //   if (conditions.length === 0) return "No conditions selected.";
-
-  //   const parts = conditions.map((cond, index) => {
-  //     let text = "";
-  //     switch (cond.type) {
-  //       case "all":
-  //         text = "all customers";
-  //         break;
-  //       case "product":
-  //         if (selectedProducts[index]?.length > 0) {
-  //           const titles = selectedProducts[index].map((p) => p.title).join(", ");
-  //           text = `customers who have ${titles} in their abandoned carts`;
-  //         } else {
-  //           text = "customers with specific products (not selected)";
-  //         }
-  //         break;
-  //       case "ordered_product":
-  //         if (selectedProducts[index]?.length > 0) {
-  //           const titles = selectedProducts[index].map((p) => p.title).join(", ");
-  //           text = `customers who have previously ordered ${titles}`;
-  //         } else {
-  //           text = "customers who have ordered specific products (not selected)";
-  //         }
-  //         break;
-  //       case "value":
-  //         text = `customers with cart value ${cond.operator || ""} ${cond.value || ""}`;
-  //         break;
-  //       case "quantity":
-  //         text = `customers with ${cond.value || ""} items in their cart ${cond.operator || ""}`;
-  //         break;
-  //       case "order_value":
-  //         text = `customers with previous order value ${cond.operator || ""} ${cond.value || ""}`;
-  //         break;
-  //       default:
-  //         text = "";
-  //     }
-  //     if (campaignType === "one_time" && cond.dateRangeEnabled && cond.startDate && cond.endDate) {
-  //       text += ` between ${cond.startDate} and ${cond.endDate}`;
-  //     }
-  //     if (index < conditions.length - 1) {
-  //       text += ` ${cond.logic} `;
-  //     }
-  //     return text;
-  //   });
-
-  //   return "This campaign will be sent to " + parts.join("");
-  // };
-
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
@@ -312,6 +326,17 @@ export default function ConditionBuilder() {
   };
 
   const updateCondition = (index, key, newValue) => {
+    // Check plan features for targeting
+    if (key === "type" && planData) {
+      const basicTypes = ["all_users", "all_carts"];
+      const isAdvanced = !basicTypes.includes(newValue);
+
+      if (isAdvanced && !planData.features?.custom_segments) {
+        setErrorMsg(`Your current plan (${planData.plan.name}) does not support advanced targeting. Please upgrade to use this feature.`);
+        return; // Block change
+      }
+    }
+
     const updated = [...conditions];
     if (key === "type") {
       updated[index].operator = "";
@@ -324,6 +349,7 @@ export default function ConditionBuilder() {
     }
     updated[index][key] = newValue;
     setConditions(updated);
+    setErrorMsg(""); // Clear error on successful update
   };
 
   const toggleDateRange = (index) => {
@@ -461,6 +487,24 @@ export default function ConditionBuilder() {
     if (!campaignName.trim()) {
       setErrorMsg("Please enter a campaign name.");
       return;
+    }
+
+    // Check limits
+    if (planData) {
+      const dailyLimit = planData.limits?.daily_push_limit || 100;
+      const remaining = planData.usage?.remaining ?? dailyLimit;
+
+      // Check user entered limit
+      if (limit && parseInt(limit) > dailyLimit) {
+        setErrorMsg(`You cannot set a limit higher than your daily plan quota (${dailyLimit}).`);
+        return;
+      }
+
+      // Check if they have enough quota
+      if (remaining <= 0) {
+        setErrorMsg(`You have reached your daily push limit of ${dailyLimit}. Please upgrade or wait until tomorrow.`);
+        return;
+      }
     }
 
     setErrorMsg(""); // clear error
@@ -625,44 +669,44 @@ export default function ConditionBuilder() {
     <Frame>
       {/* ContextualSaveBar for text field changes only */}
       {isTextDirty && (
-  <ContextualSaveBar
-    message="You have unsaved changes"
-    saveAction={{
-      onAction: handleSend,
-      loading: isLoading,
-      disabled: isLoading,
-      content: "Send Campaign",
-    }}
-    discardAction={{
-      onAction: handleDiscard,
-      content: "Discard",
-    }}
-  />
-)}
+        <ContextualSaveBar
+          message="You have unsaved changes"
+          saveAction={{
+            onAction: handleSend,
+            loading: isLoading,
+            disabled: isLoading,
+            content: "Send Campaign",
+          }}
+          discardAction={{
+            onAction: handleDiscard,
+            content: "Discard",
+          }}
+        />
+      )}
 
 
       <Page title="Push Notification Template">
         {/* Error Banner */}
         {errorMsg && (
-  <Banner
-    status={
-      errorMsg === "Campaign scheduled successfully!"
-        ? "success"
-        : "critical"
-    }
-    title={
-      errorMsg === "Campaign scheduled successfully!"
-        ? "Success"
-        : "Error"
-    }
-    tone={errorMsg !== "Campaign scheduled successfully!" ? "critical" : undefined}
-    onDismiss={() => setErrorMsg("")}
-  >
-    <Text tone={errorMsg !== "Campaign scheduled successfully!" ? "critical" : undefined}>
-      {errorMsg}
-    </Text>
-  </Banner>
-)}
+          <Banner
+            status={
+              errorMsg === "Campaign scheduled successfully!"
+                ? "success"
+                : "critical"
+            }
+            title={
+              errorMsg === "Campaign scheduled successfully!"
+                ? "Success"
+                : "Error"
+            }
+            tone={errorMsg !== "Campaign scheduled successfully!" ? "critical" : undefined}
+            onDismiss={() => setErrorMsg("")}
+          >
+            <Text tone={errorMsg !== "Campaign scheduled successfully!" ? "critical" : undefined}>
+              {errorMsg}
+            </Text>
+          </Banner>
+        )}
 
         <Grid>
           <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 6, lg: 12, xl: 12 }}>
@@ -672,6 +716,22 @@ export default function ConditionBuilder() {
                   <Spinner size="large" />
                 </div>
               )}
+
+              {/* Quota & Audience Stats */}
+              <Box paddingBlockEnd="400">
+                <InlineStack align="space-between">
+                  <div style={{ background: "#f1f8f5", padding: "10px 16px", borderRadius: "8px", border: "1px solid #c1eac5" }}>
+                    <Text variant="bodyMd" fontWeight="bold" tone="success">
+                      Remaining Quota: {planData?.usage ? `${planData.usage.remaining} / ${planData.usage.limit}` : "Loading..."}
+                    </Text>
+                  </div>
+                  <div style={{ background: "#eef2ff", padding: "10px 16px", borderRadius: "8px", border: "1px solid #c7d2fe" }}>
+                    <Text variant="bodyMd" fontWeight="bold" tone="info">
+                      Estimated Audience: {calculatingAudience ? <Spinner size="small" /> : `${audienceCount !== null ? audienceCount : "-"} users`}
+                    </Text>
+                  </div>
+                </InlineStack>
+              </Box>
 
               {/* Campaign Name */}
               <Box paddingBlockEnd="400">
@@ -735,15 +795,15 @@ export default function ConditionBuilder() {
                         />
 
                         {["value", "order_value", "quantity", "product", "ordered_product"].includes(cond.type) && (
-  <Select
-    label="Operator"
-    labelHidden
-    options={getOperatorOptions(cond.type)}
-    value={cond.operator}
-    onChange={(val) => updateCondition(index, "operator", val)}
-    style={{ minWidth: "150px" }}
-  />
-)}
+                          <Select
+                            label="Operator"
+                            labelHidden
+                            options={getOperatorOptions(cond.type)}
+                            value={cond.operator}
+                            onChange={(val) => updateCondition(index, "operator", val)}
+                            style={{ minWidth: "150px" }}
+                          />
+                        )}
                         {(cond.type === "product" || cond.type === "ordered_product") && (
                           <div>
                             <Button onClick={() => openResourcePicker(index)}>
@@ -773,8 +833,8 @@ export default function ConditionBuilder() {
                               cond.type === "value"
                                 ? "Cart value"
                                 : cond.type === "quantity"
-                                ? "Quantity"
-                                : "Order value"
+                                  ? "Quantity"
+                                  : "Order value"
                             }
                             value={cond.value}
                             onChange={(val) => handleConditionValueChange(index, val)}
@@ -891,9 +951,15 @@ export default function ConditionBuilder() {
                 </Box>
               )}
 
-              <Button onClick={handleSend} primary disabled={isLoading}>
-  Send Campaign
-</Button>
+              <Box paddingBlockStart="400">
+                <Button primary onClick={handleSend} loading={isLoading}>
+                  {campaignType === "one_time"
+                    ? scheduleType === "scheduled"
+                      ? "Schedule Campaign"
+                      : "Send Now"
+                    : "Activate Automation"}
+                </Button>
+              </Box>
             </Card>
           </Grid.Cell>
         </Grid>
