@@ -18,30 +18,30 @@ const shopify = shopifyApp({
   appUrl: process.env.SHOPIFY_APP_URL || "",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-
+  
   billing: {
-    STARTER_PLAN: {
-      amount: 9.00,        // $9.00
-      currencyCode: "USD",
-      interval: "EVERY_30_DAYS",
-      trialDays: 7,
-      test: true,
-    },
-    GROWTH_PLAN: {
-      amount: 29.00,       // $29.00
-      currencyCode: "USD",
-      interval: "EVERY_30_DAYS",
-      trialDays: 7,
-      test: true,
-    },
-    PRO_PLAN: {
-      amount: 79.00,       // $79.00
-      currencyCode: "USD",
-      interval: "EVERY_30_DAYS",
-      trialDays: 7,
-      test: true,
-    },
+  STARTER_PLAN: {
+    amount: 5.99,        // $5.99
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS",
+    trialDays: 7,
+    test: true,
   },
+  GROWTH_PLAN: {
+    amount: 17.99,       // $17.99
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS",
+    trialDays: 7,
+    test: true,
+  },
+  PRO_PLAN: {
+    amount: 32.99,       // $32.99
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS",
+    trialDays: 7,
+    test: true,
+  },
+},
 
 
 });
