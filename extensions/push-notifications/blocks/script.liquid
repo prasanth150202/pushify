@@ -7,304 +7,473 @@
 {% endschema %}
 
 <!-- Push Notification Modal -->
-<div id="push-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;justify-content:center;align-items:center;z-index:9999;">
-  <div id="push-modal-card" style="position:relative;padding:20px;box-shadow:0 6px 18px rgba(0,0,0,0.08);font-family:sans-serif;">
-    <button id="push-close-btn" style="position:absolute;top:12px;right:12px;border:none;background:transparent;font-size:18px;font-weight:bold;cursor:pointer;">×</button>
-    <img id="push-modal-image" style="display:none;width:100%;border-radius:8px;margin-bottom:12px;"/>
-    <div id="push-modal-text" style="color:#111;">
-      <div id="push-modal-title" style="font-size:16px;font-weight:600;">Stay updated!</div>
-      <div id="push-modal-body" style="margin-top:6px;font-size:14px;color:#555;opacity:0.9;">Allow notifications to get the latest offers.</div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:14px;">
-      <button id="push-allow-btn" style="flex:1;padding:10px 12px;font-weight:600;cursor:pointer;">Allow</button>
-      <button id="push-deny-btn" style="flex:1;padding:10px 12px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;">Not now</button>
+<div
+  id="push-modal"
+  style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;justify-content:center;align-items:center;z-index:9999;"
+>
+  <div id="push-modal-outer" style="position:relative;padding:20px;border-radius:12px;font-family:sans-serif;">
+    <button
+      id="push-close-btn"
+      style="position:absolute;top:17px;right:15px;border:none;background:transparent;font-size:16px;font-weight:bold;cursor:pointer;color:#999;"
+    >
+      ×
+    </button>
+
+    <div id="push-modal-inner" style="padding:16px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.08);">
+      <img id="push-modal-image" style="display:none;width:100%;border-radius:8px;margin-bottom:12px;">
+      <div id="push-modal-text" style="color:#111;">
+        <div id="push-modal-title" style="font-size:16px;font-weight:600;">Stay updated!</div>
+        <div id="push-modal-body" style="margin-top:6px;font-size:14px;color:#555;opacity:0.9;">
+          Allow notifications to get the latest offers.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button id="push-allow-btn" style="flex:1;padding:10px 12px;font-weight:600;cursor:pointer;">Allow</button>
+        <button id="push-deny-btn" style="flex:1;padding:10px 12px;border:1px solid rgba(0,0,0,0.08);cursor:pointer;">
+          Not now
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-(async function () {
-  const DEBUG = true;
-  const debug = (...args) => DEBUG && console.log('[PUSH DEBUG]', ...args);
+  (async function () {
+    const DEBUG = true;
+    const debug = (...args) => DEBUG;
 
-  const firebaseModuleUrl = 'https://www.gstatic.com/firebasejs/12.0.0';
-  const firebaseConfig = {
-    apiKey: "AIzaSyDlAIWrQeYfui2kO1CulpTeMz8FB7hT_2s",
-    authDomain: "push-notify-2025.firebaseapp.com",
-    projectId: "push-notify-2025",
-    storageBucket: "push-notify-2025.firebasestorage.app",
-    messagingSenderId: "666851901382",
-    appId: "1:666851901382:web:3e159468bc36d128dafcc7",
-    measurementId: "G-0X2W8S4QZE"
-  };
-  const vapidKey = 'BF-c9w6XoYxZULl_rXymLo6DaFTIWR33j7WulhbLtTovV80m1ptMztGNtxLqqw1SokHR1ZQRF3xCEMBLnNaBbw0';
-
-
-  const shop = window.Shopify?.shop || window.location.hostname;
-
-  // === Generate or Get Session ID ===
-  function getOrCreateVisitorId() {
-    let visitorId = localStorage.getItem('push_visitor_id');
-    if (!visitorId) {
-      visitorId = `visitor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('push_visitor_id', visitorId);
-      debug('Created new visitor ID:', visitorId);
-    } else {
-      debug('Existing visitor ID:', visitorId);
-    }
-    return visitorId;
-  }
-  const sessionId = getOrCreateVisitorId();
-
-  // === Utility Functions ===
-  async function fetchCustomUI(shopDomain) {
-    try {
-      const res = await fetch(`https://api.zingbot.io/push-notify/push-notify/customui.php?shop_domain=${shopDomain}`);
-      return await res.json();
-    } catch (err) {
-      debug('fetchCustomUI failed:', err);
-      return null;
-    }
-  }
-
-  function getBrowserInfo() {
-    const ua = navigator.userAgent;
-    let browser = "Unknown", version = "Unknown";
-    if (/Edg\//.test(ua)) { browser = "Edge"; version = ua.match(/Edg\/([\d.]+)/)?.[1]; }
-    else if (/OPR\//.test(ua)) { browser = "Opera"; version = ua.match(/OPR\/([\d.]+)/)?.[1]; }
-    else if (/Chrome\//.test(ua)) { browser = "Chrome"; version = ua.match(/Chrome\/([\d.]+)/)?.[1]; }
-    else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) { browser = "Safari"; version = ua.match(/Version\/([\d.]+)/)?.[1]; }
-    else if (/Firefox\//.test(ua)) { browser = "Firefox"; version = ua.match(/Firefox\/([\d.]+)/)?.[1]; }
-
-    let os = "Unknown";
-    if (/Windows NT/.test(ua)) os = "Windows";
-    else if (/Mac OS X/.test(ua)) os = "MacOS";
-    else if (/Android/.test(ua)) os = "Android";
-    else if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
-    else if (/Linux/.test(ua)) os = "Linux";
-
-    return { browser, version, os, ua };
-  }
-
-  async function getVisitorLocation() {
-    try {
-      const res = await fetch('https://ipapi.co/json/');
-      const geo = await res.json();
-      return { ip: geo.ip, geo };
-    } catch {
-      return { ip: null, geo: {} };
-    }
-  }
-
-  async function fetchCartSafe() {
-    try {
-      const res = await fetch('/cart.js');
-      if (!res.ok) throw new Error('cart.js returned ' + res.status);
-      return await res.json();
-    } catch {
-      return { token: null, items: [] };
-    }
-  }
-
-  async function sendToServer(payload) {
-    try {
-      debug('Sending to server:', payload);
-      await fetch('https://api.zingbot.io/push-notify/push-notify/save_token_client.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      debug('Data sent successfully');
-    } catch (err) {
-      debug('sendToServer failed:', err);
-    }
-  }
-
-  // === Step 1: Initial Visit Data ===
-  async function sendInitialVisitorData() {
-    debug('=== SENDING INITIAL VISITOR DATA ===');
-    const { ip, geo } = await getVisitorLocation();
-    const browserInfo = getBrowserInfo();
-    const cart = await fetchCartSafe();
-
-    const payload = {
-      session_id: sessionId,
-      shop: shop,
-      ip_add: ip,
-      location: {
-        country: geo?.country_name ?? null,
-        state: geo?.region ?? null,
-        city: geo?.city ?? null
-      },
-      browser: browserInfo,
-      cart_token: cart?.token ?? null,
-      cart_items: cart?.items ?? [],
-      url: window.location.href,
-      fcm_token: null,
-      visit_timestamp: (new Date()).toISOString(),
-      is_initial_visit: true
+    const firebaseModuleUrl = 'https://www.gstatic.com/firebasejs/12.0.0';
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDlAIWrQeYfui2kO1CulpTeMz8FB7hT_2s',
+      authDomain: 'push-notify-2025.firebaseapp.com',
+      projectId: 'push-notify-2025',
+      storageBucket: 'push-notify-2025.firebasestorage.app',
+      messagingSenderId: '666851901382',
+      appId: '1:666851901382:web:3e159468bc36d128dafcc7',
+      measurementId: 'G-0X2W8S4QZE',
     };
+    const vapidKey = 'BOUm__5K8IkD3n6Jbqx6WWqsch0wZd6v2p1ZldiFHLIO0jY8OLjQs3uPYwWTYx-Urk9wB415aCsQGMYJTsTHqFM';
 
-    await sendToServer(payload);
-  }
+    const shop = window.Shopify?.shop || window.location.hostname;
 
-  // === Step 2: Register SW & FCM Token ===
-  async function tryRegisterSWAndGetToken() {
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        debug('Notification permission denied');
+    // === Generate or Get Session ID ===
+    function getOrCreateVisitorId() {
+      let visitorId = localStorage.getItem('push_visitor_id');
+      if (!visitorId) {
+        visitorId = `visitor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('push_visitor_id', visitorId);
+        debug('Created new visitor ID:', visitorId);
+      } else {
+        debug('Existing visitor ID:', visitorId);
+      }
+      return visitorId;
+    }
+    const sessionId = getOrCreateVisitorId();
+
+    // === Utility Functions ===
+    async function fetchCustomUI(shopDomain) {
+      try {
+        const res = await fetch(
+          `https://int.pushnova.app/customui.php?shop_domain=${shopDomain}`
+        );
+        return await res.json();
+      } catch (err) {
+        debug('fetchCustomUI failed:', err);
         return null;
       }
-
-      const appModule = await import(`${firebaseModuleUrl}/firebase-app.js`);
-      const msgModule = await import(`${firebaseModuleUrl}/firebase-messaging.js`);
-      const app = appModule.initializeApp(firebaseConfig);
-      const messaging = msgModule.getMessaging(app);
-
-      if (!('serviceWorker' in navigator)) return null;
-
-      const registration = await navigator.serviceWorker.register('/apps/notify/firebase-messaging-sw.js');
-      await new Promise(r => setTimeout(r, 400));
-      const token = await msgModule.getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
-      if (token) {
-        debug('FCM token obtained:', token);
-        return token;
-      }
-      return null;
-    } catch (err) {
-      debug('tryRegisterSWAndGetToken failed:', err);
-      return null;
     }
-  }
 
-  // === Step 3: Cart Tracking (Live Updates) ===
-  async function sendUpdatedCart() {
-    try {
+    function getBrowserInfo() {
+      const ua = navigator.userAgent;
+      let browser = 'Unknown',
+        version = 'Unknown';
+      if (/Edg\//.test(ua)) {
+        browser = 'Edge';
+        version = ua.match(/Edg\/([\d.]+)/)?.[1];
+      } else if (/OPR\//.test(ua)) {
+        browser = 'Opera';
+        version = ua.match(/OPR\/([\d.]+)/)?.[1];
+      } else if (/Chrome\//.test(ua)) {
+        browser = 'Chrome';
+        version = ua.match(/Chrome\/([\d.]+)/)?.[1];
+      } else if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) {
+        browser = 'Safari';
+        version = ua.match(/Version\/([\d.]+)/)?.[1];
+      } else if (/Firefox\//.test(ua)) {
+        browser = 'Firefox';
+        version = ua.match(/Firefox\/([\d.]+)/)?.[1];
+      }
+
+      let os = 'Unknown';
+      if (/Windows NT/.test(ua)) os = 'Windows';
+      else if (/Mac OS X/.test(ua)) os = 'MacOS';
+      else if (/Android/.test(ua)) os = 'Android';
+      else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+      else if (/Linux/.test(ua)) os = 'Linux';
+
+      return { browser, version, os, ua };
+    }
+
+    async function getVisitorLocation() {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const geo = await res.json();
+        return { ip: geo.ip, geo };
+      } catch {
+        return { ip: null, geo: {} };
+      }
+    }
+
+    async function fetchCartSafe() {
+      try {
+        const res = await fetch('/cart.js');
+        if (!res.ok) throw new Error('cart.js returned ' + res.status);
+        return await res.json();
+      } catch {
+        return { token: null, items: [] };
+      }
+    }
+
+    async function sendToServer(payload) {
+      try {
+        debug('Sending to server:', payload);
+        await fetch('https://int.pushnova.app/save_token_client.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        debug('Data sent successfully');
+      } catch (err) {
+        debug('sendToServer failed:', err);
+      }
+    }
+
+    // === Step 1: Initial Visit Data ===
+    async function sendInitialVisitorData() {
+      debug('=== SENDING INITIAL VISITOR DATA ===');
+      const { ip, geo } = await getVisitorLocation();
+      const browserInfo = getBrowserInfo();
       const cart = await fetchCartSafe();
+
       const payload = {
         session_id: sessionId,
         shop: shop,
+        ip_add: ip,
+        location: {
+          country: geo?.country_name ?? null,
+          state: geo?.region ?? null,
+          city: geo?.city ?? null,
+        },
+        browser: browserInfo,
         cart_token: cart?.token ?? null,
         cart_items: cart?.items ?? [],
         url: window.location.href,
-        cart_updated: true,
-        timestamp: new Date().toISOString()
+        fcm_token: null,
+        visit_timestamp: new Date().toISOString(),
+        is_initial_visit: true,
       };
+
       await sendToServer(payload);
-      debug('Cart updated data sent');
-    } catch (err) {
-      debug('Cart update send failed:', err);
     }
-  }
 
-  // Intercept fetch to detect cart changes
-  const originalFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const response = await originalFetch.apply(this, args);
-    const url = (args[0] && args[0].toString()) || '';
-    if (url.includes('/cart/add') || url.includes('/cart/update') || url.includes('/cart/change')) {
-      debug('Detected cart update via fetch:', url);
-      setTimeout(sendUpdatedCart, 1000);
+    // === Step 2: Register SW & FCM Token ===
+    async function tryRegisterSWAndGetToken() {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          debug('Notification permission denied');
+          return null;
+        }
+
+        const appModule = await import(`${firebaseModuleUrl}/firebase-app.js`);
+        const msgModule = await import(`${firebaseModuleUrl}/firebase-messaging.js`);
+        const app = appModule.initializeApp(firebaseConfig);
+        const messaging = msgModule.getMessaging(app);
+
+        if (!('serviceWorker' in navigator)) return null;
+
+        const registration = await navigator.serviceWorker.register('/apps/notify/firebase-messaging-sw.js');
+        await new Promise((r) => setTimeout(r, 400));
+        const token = await msgModule.getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+        if (token) {
+          debug('FCM token obtained:', token);
+          return token;
+        }
+        return null;
+      } catch (err) {
+        debug('tryRegisterSWAndGetToken failed:', err);
+        return null;
+      }
     }
-    return response;
-  };
 
-  // === Step 4: UI + Modal Setup ===
-  function applyUI(ui) {
-    if (!ui) return;
-    const card = document.getElementById('push-modal-card');
-    card.style.background = ui.colors.card;
-    card.style.fontFamily = ui.font;
-
-    document.getElementById('push-modal-title').textContent = ui.title;
-    document.getElementById('push-modal-body').textContent = ui.body;
-
-    const img = document.getElementById('push-modal-image');
-    if (ui.image) { img.src = ui.image; img.style.display = 'block'; }
-
-    const allowBtn = document.getElementById('push-allow-btn');
-    allowBtn.textContent = ui.buttons.primary.text;
-    allowBtn.style.background = ui.buttons.primary.color;
-    allowBtn.style.borderRadius = ui.buttonShape === 'rounded' ? '8px' : '2px';
-
-    const denyBtn = document.getElementById('push-deny-btn');
-    denyBtn.textContent = ui.buttons.secondary.text;
-    denyBtn.style.color = ui.buttons.secondary.color;
-    denyBtn.style.borderColor = ui.buttons.secondary.color;
-    denyBtn.style.borderRadius = ui.buttonShape === 'rounded' ? '8px' : '2px';
-  }
-
-  function setupPushModal() {
-    const modal = document.getElementById('push-modal');
-    modal.style.display = 'flex';
-
-    const hideModal = () => {
-      localStorage.setItem('push_permission_set', 'true');
-      modal.style.display = 'none';
-    };
-
-    document.getElementById('push-deny-btn')?.addEventListener('click', hideModal);
-    document.getElementById('push-close-btn')?.addEventListener('click', hideModal);
-
-    document.getElementById('push-allow-btn')?.addEventListener('click', async () => {
-      hideModal();
-      debug('=== USER CLICKED ALLOW - GETTING FCM TOKEN ===');
-
-      const token = await tryRegisterSWAndGetToken();
-      if (token) {
+    // === Step 3: Cart Tracking (Live Updates) ===
+    async function sendUpdatedCart() {
+      try {
+        const cart = await fetchCartSafe();
         const payload = {
           session_id: sessionId,
           shop: shop,
-          fcm_token: token,
-          token_timestamp: new Date().toISOString(),
-          is_token_update: true
+          cart_token: cart?.token ?? null,
+          cart_items: cart?.items ?? [],
+          url: window.location.href,
+          cart_updated: true,
+          timestamp: new Date().toISOString(),
         };
         await sendToServer(payload);
-        debug('FCM token linked to session');
-      } else {
-        debug('Failed to get FCM token');
+        debug('Cart updated data sent');
+      } catch (err) {
+        debug('Cart update send failed:', err);
       }
-    });
-  }
-
-  // === Init ===
-debug('=== SCRIPT STARTED ===');
-await sendInitialVisitorData();
-const ui = await fetchCustomUI(shop);
-const delay = (ui?.delay ?? 5) * 1000;
-applyUI(ui);
-
-// ✔ AUTO Native permission request (works everywhere)
-tryRegisterSWAndGetToken()
-  .then(async (token) => {
-    console.log("Native permission triggered automatically");
-    if (token) {
-      const payload = {
-        session_id: sessionId,
-        shop: shop,
-        fcm_token: token,
-        token_timestamp: new Date().toISOString(),
-        is_token_update: true
-      };
-      await sendToServer(payload);
-      debug('FCM token sent from native trigger');
     }
-  })
-  .catch(() => {});
 
-setTimeout(() => {
-  const showPush = new URLSearchParams(window.location.search).get('show_push');
+    // Intercept fetch to detect cart changes
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const response = await originalFetch.apply(this, args);
+      const url = (args[0] && args[0].toString()) || '';
+      if (url.includes('/cart/add') || url.includes('/cart/update') || url.includes('/cart/change')) {
+        debug('Detected cart update via fetch:', url);
+        setTimeout(sendUpdatedCart, 1000);
+      }
+      return response;
+    };
 
-  if (showPush === '1') {
-    setupPushModal();
-  } else {
-    console.log("Push modal disabled because show_push != 1");
-  }
+    // === Step 4: UI + Modal Setup ===
+    function applyUI(ui) {
+      if (!ui) return;
 
-}, delay);
+      // Load Font
+      if (ui.font) {
+        const fontName = ui.font;
+        const fonts = {
+          Inter: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap',
+          Roboto: 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
+          Poppins: 'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap',
+          Lato: 'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap',
+        };
 
+        if (fonts[fontName]) {
+          if (!document.getElementById(`push-font-${fontName}`)) {
+            const link = document.createElement('link');
+            link.id = `push-font-${fontName}`;
+            link.rel = 'stylesheet';
+            link.href = fonts[fontName];
+            document.head.appendChild(link);
+          }
+        }
+      }
 
-})();
+      const modal = document.getElementById('push-modal');
+      const outer = document.getElementById('push-modal-outer');
+      const inner = document.getElementById('push-modal-inner');
 
+      // Apply background overlay color (optional, usually transparent or dim)
+      // React preview doesn't show overlay, but in real app we might want it.
+      // Keeping existing logic for overlay.
+      modal.style.background = ui.colors?.background ? `${ui.colors.background}cc` : 'rgba(0,0,0,0.4)';
+      // Wait, if ui.colors.background is the "Background" of the Outer card, we shouldn't use it for the modal overlay.
+      // In React: backgroundColor is applied to the Outer container.
+      // The overlay should probably be transparent or standard dim.
+      // Let's fix this: modal overlay should be standard. Outer gets the color.
+      modal.style.background = 'rgba(0,0,0,0.4)'; // Fixed overlay color
+
+      // Apply Outer styling
+      outer.style.background = ui.colors?.background || '#ffffff';
+      outer.style.fontFamily = ui.font || 'sans-serif';
+
+      // Apply Inner styling
+      inner.style.background = ui.colors?.card || '#f7f7f7';
+
+      // Apply position
+      const position = ui.position || 'bottom-right';
+      outer.style.maxWidth = '400px';
+      outer.style.width = '90%';
+
+      if (position === 'bottom-right') {
+        modal.style.justifyContent = 'flex-end';
+        modal.style.alignItems = 'flex-end';
+        outer.style.margin = '20px';
+      } else if (position === 'bottom-left') {
+        modal.style.justifyContent = 'flex-start';
+        modal.style.alignItems = 'flex-end';
+        outer.style.margin = '20px';
+      } else if (position === 'top-right') {
+        modal.style.justifyContent = 'flex-end';
+        modal.style.alignItems = 'flex-start';
+        outer.style.margin = '20px';
+      } else if (position === 'top-left') {
+        modal.style.justifyContent = 'flex-start';
+        modal.style.alignItems = 'flex-start';
+        outer.style.margin = '20px';
+      } else {
+        // center
+        modal.style.justifyContent = 'center';
+        modal.style.alignItems = 'center';
+        outer.style.margin = '20px';
+      }
+
+      // Apply animation
+      const animation = ui.animation || 'fade-in';
+      if (animation === 'slide-up') {
+        outer.style.animation = 'slideUp 0.4s ease-out';
+      } else if (animation === 'slide-down') {
+        outer.style.animation = 'slideDown 0.4s ease-out';
+      } else if (animation === 'bounce') {
+        outer.style.animation = 'bounce 0.6s ease-out';
+      } else {
+        // fade-in
+        outer.style.animation = 'fadeIn 0.3s ease-out';
+      }
+
+      // Apply text content and colors
+      const titleEl = document.getElementById('push-modal-title');
+      const bodyEl = document.getElementById('push-modal-body');
+      titleEl.textContent = ui.title || 'Stay updated!';
+      bodyEl.textContent = ui.body || 'Allow notifications to get the latest offers.';
+      titleEl.style.color = ui.colors?.text || '#111';
+      bodyEl.style.color = ui.colors?.text || '#555';
+
+      // Apply image
+      const img = document.getElementById('push-modal-image');
+      if (ui.image) {
+        img.src = ui.image;
+        img.style.display = 'block';
+      }
+
+      // Apply button styling
+      const allowBtn = document.getElementById('push-allow-btn');
+      allowBtn.textContent = ui.buttons?.primary?.text || 'Allow';
+      allowBtn.style.background = ui.buttons?.primary?.color || '#0066ff';
+      allowBtn.style.color = '#ffffff';
+      allowBtn.style.border = 'none';
+      allowBtn.style.borderRadius = ui.buttonShape === 'rounded' ? '8px' : '2px';
+
+      const denyBtn = document.getElementById('push-deny-btn');
+      denyBtn.textContent = ui.buttons?.secondary?.text || 'Not now';
+      denyBtn.style.color = ui.buttons?.secondary?.color || '#777';
+      denyBtn.style.background = 'transparent';
+      denyBtn.style.border = `1px solid ${ui.buttons?.secondary?.color || '#777'}`;
+      denyBtn.style.borderRadius = ui.buttonShape === 'rounded' ? '8px' : '2px';
+
+      // Add CSS animations if not already present
+      if (!document.getElementById('push-animations')) {
+        const style = document.createElement('style');
+        style.id = 'push-animations';
+        style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(100px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes slideDown {
+          from { transform: translateY(-100px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-20px); }
+          60% { transform: translateY(-10px); }
+        }
+      `;
+        document.head.appendChild(style);
+      }
+    }
+
+    function setupPushModal() {
+      const modal = document.getElementById('push-modal');
+      modal.style.display = 'flex';
+
+      const hideModal = () => {
+        localStorage.setItem('push_permission_set', 'true');
+        modal.style.display = 'none';
+      };
+
+      document.getElementById('push-deny-btn')?.addEventListener('click', hideModal);
+      document.getElementById('push-close-btn')?.addEventListener('click', hideModal);
+
+      document.getElementById('push-allow-btn')?.addEventListener('click', async () => {
+        hideModal();
+        debug('=== USER CLICKED ALLOW - GETTING FCM TOKEN ===');
+
+        const token = await tryRegisterSWAndGetToken();
+        if (token) {
+          const payload = {
+            session_id: sessionId,
+            shop: shop,
+            fcm_token: token,
+            token_timestamp: new Date().toISOString(),
+            is_token_update: true,
+          };
+          await sendToServer(payload);
+          debug('FCM token linked to session');
+        } else {
+          debug('Failed to get FCM token');
+        }
+      });
+    }
+
+    // === Init ===
+    debug('=== SCRIPT STARTED ===');
+    await sendInitialVisitorData();
+    const ui = await fetchCustomUI(shop);
+
+    if (ui) {
+      const delay = (ui.delay ?? 5) * 1000;
+      applyUI(ui);
+
+      // ✔ AUTO Native permission request (works everywhere)
+      // Only run automatically if permission is already granted (to update token),
+      // OR if the custom UI is disabled (fallback to native).
+      if (Notification.permission === 'granted' || !ui.askAllow) {
+        tryRegisterSWAndGetToken()
+          .then(async (token) => {
+            //console.log('Native permission triggered automatically');
+            if (token) {
+              const payload = {
+                session_id: sessionId,
+                shop: shop,
+                fcm_token: token,
+                token_timestamp: new Date().toISOString(),
+                is_token_update: true,
+              };
+              await sendToServer(payload);
+              debug('FCM token sent from native trigger');
+            }
+          })
+          .catch(() => {});
+      }
+
+      setTimeout(() => {
+        // Check if feature is globally enabled via config
+        if (!ui.askAllow) {
+          debug('Push modal disabled in settings (askAllow: false)');
+          return;
+        }
+
+        const showPush = new URLSearchParams(window.location.search).get('show_push');
+        const alreadyInteracted = localStorage.getItem('push_permission_set');
+
+        // Show if forced via URL OR (not interacting before AND permission is default)
+        // Show if forced via URL (anything other than '0') OR (not interacting before AND permission is default)
+        // Checks:
+        // 1. showPush exists and is not '0' (forcing debug/preview modes)
+        // 2. OR User hasn't interacted yet AND native permission is still default (askAllow is true per line 451)
+        if ((showPush && showPush !== '0') || (!alreadyInteracted && Notification.permission === 'default')) {
+          debug('Showing push modal. Reason:', showPush ? 'Forced by show_push' : 'New visitor & default permission');
+          setupPushModal();
+        } else {
+          debug('Push modal skipped. Conditions:', {
+            showPush,
+            alreadyInteracted,
+            permission: Notification.permission,
+          });
+        }
+      }, delay);
+    } else {
+      debug('Failed to load UI config');
+    }
+  })();
 </script>

@@ -25,6 +25,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { usePlanFeatures } from "../hooks/usePlanFeatures";
+import { InlineUpgradePrompt } from "../components/UpgradePrompts";
 
 // Professional dashboard palette
 const COLORS = ["#5c6ac4", "#47c1bf", "#ecc94b", "#de3618", "#9c6ade", "#bf0711"];
@@ -39,6 +41,7 @@ export default function Dashboard() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  const { hasFeature } = usePlanFeatures();
 
   // Fetch campaigns (initial + refresh)
   const fetchCampaigns = useCallback(async (showLoading = false) => {
@@ -177,6 +180,9 @@ export default function Dashboard() {
     return null;
   };
 
+  const hasEnhancedAnalytics = hasFeature("enhanced_analytics");
+  const hasGrowthAnalytics = hasFeature("growth_analytics");
+
   return (
     <Page
       title="
@@ -290,13 +296,20 @@ export default function Dashboard() {
           <BlockStack gap="400">
             <Text as="h2" variant="headingLg">Store Analytics</Text>
 
+            {!hasEnhancedAnalytics && (
+              <InlineUpgradePrompt
+                featureName="Advanced analytics (traffic, browser, and location insights)"
+                requiredPlan="Starter"
+              />
+            )}
+
             {loadingAnalytics ? (
               <Card>
                 <Box padding="800" style={{ display: 'flex', justifyContent: 'center' }}>
                   <Spinner accessibilityLabel="Loading analytics" size="large" />
                 </Box>
               </Card>
-            ) : analyticsData ? (
+            ) : analyticsData && hasEnhancedAnalytics ? (
               <BlockStack gap="400">
                 {/* Traffic Stats Row */}
                 <Grid
@@ -368,13 +381,13 @@ export default function Dashboard() {
                 <div className="chart-wrapper">
                   <Grid columns={{ sm: 1, md: 2 }}>
 
-                    {/* Visitors by Location */}
+                    {/* Visitors by Location (Starter+ via enhanced_analytics) */}
                     <Grid.Cell>
                       <Card>
                         <Box padding="400">
                           <BlockStack gap="400">
                             <Text as="h3" variant="headingMd">Visitors by Location</Text>
-                            <Box style={{ height: 300 }}>
+                            <Box style={{ height: 300, minWidth: 0 }}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={transformData(analyticsData.locations)}>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#dfe3e8" />
@@ -390,13 +403,13 @@ export default function Dashboard() {
                       </Card>
                     </Grid.Cell>
 
-                    {/* Browser Distribution */}
+                    {/* Browser Distribution (Starter+ via enhanced_analytics) */}
                     <Grid.Cell>
                       <Card>
                         <Box padding="400">
                           <BlockStack gap="400">
                             <Text as="h3" variant="headingMd">Browser Distribution</Text>
-                            <Box style={{ height: 300 }}>
+                            <Box style={{ height: 300, minWidth: 0 }}>
                               <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                   <Pie
@@ -422,53 +435,67 @@ export default function Dashboard() {
                       </Card>
                     </Grid.Cell>
 
-                    {/* Device Split */}
+                    {/* Device Split (Growth+ via growth_analytics) */}
                     <Grid.Cell>
                       <Card>
                         <Box padding="400">
                           <BlockStack gap="400">
                             <Text as="h3" variant="headingMd">Device Split</Text>
-                            <Box style={{ height: 300 }}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Pie
-                                    data={transformData(analyticsData.device_usage)}
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={80}
-                                    dataKey="value"
-                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                  >
-                                    {transformData(analyticsData.device_usage).map((entry, index) => (
-                                      <Cell key={index} fill={COLORS[(index + 2) % COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip content={<CustomTooltip />} />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </Box>
+                            {hasGrowthAnalytics ? (
+                              <Box style={{ height: 300, minWidth: 0 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie
+                                      data={transformData(analyticsData.device_usage)}
+                                      cx="50%"
+                                      cy="50%"
+                                      outerRadius={80}
+                                      dataKey="value"
+                                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    >
+                                      {transformData(analyticsData.device_usage).map((entry, index) => (
+                                        <Cell key={index} fill={COLORS[(index + 2) % COLORS.length]} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip content={<CustomTooltip />} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </Box>
+                            ) : (
+                              <InlineUpgradePrompt
+                                featureName="Device analytics"
+                                requiredPlan="Growth"
+                              />
+                            )}
                           </BlockStack>
                         </Box>
                       </Card>
                     </Grid.Cell>
 
-                    {/* Top Products Viewed */}
+                    {/* Top Products Viewed (Growth+ via growth_analytics) */}
                     <Grid.Cell>
                       <Card>
                         <Box padding="400">
                           <BlockStack gap="400">
                             <Text as="h3" variant="headingMd">Top Products Viewed</Text>
-                            <Box style={{ height: 300 }}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart layout="vertical" data={transformData(analyticsData.product_views)}>
-                                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#dfe3e8" />
-                                  <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} />
-                                  <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} />
-                                  <Tooltip content={<CustomTooltip />} />
-                                  <Bar dataKey="value" fill="#47c1bf" radius={[0, 4, 4, 0]} name="Views" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </Box>
+                            {hasGrowthAnalytics ? (
+                              <Box style={{ height: 300, minWidth: 0 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart layout="vertical" data={transformData(analyticsData.product_views)}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#dfe3e8" />
+                                    <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} />
+                                    <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Bar dataKey="value" fill="#47c1bf" radius={[0, 4, 4, 0]} name="Views" />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </Box>
+                            ) : (
+                              <InlineUpgradePrompt
+                                featureName="Top products analytics"
+                                requiredPlan="Growth"
+                              />
+                            )}
                           </BlockStack>
                         </Box>
                       </Card>

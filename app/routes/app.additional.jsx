@@ -19,6 +19,8 @@ import {
 } from "@shopify/polaris";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { usePlanFeatures } from "../hooks/usePlanFeatures";
+import { UpgradeBanner } from "../components/UpgradePrompts";
 
 // Combined date and time selector component
 function DateTimeSelector({ dateValue, onDateChange, timeValue, onTimeChange }) {
@@ -118,11 +120,11 @@ export default function ConditionBuilder() {
   useEffect(() => {
     const fetchPlan = async () => {
       try {
-        console.log("Fetching plan...");
+        //console.log("Fetching plan...");
         const res = await fetch("/api/getplan");
-        console.log("Plan response status:", res.status);
+        //console.log("Plan response status:", res.status);
         const data = await res.json();
-        console.log("Plan data:", data);
+        //console.log("Plan data:", data);
         if (data.success) {
           setPlanData(data);
         } else {
@@ -331,8 +333,12 @@ export default function ConditionBuilder() {
       const basicTypes = ["all_users", "all_carts"];
       const isAdvanced = !basicTypes.includes(newValue);
 
-      if (isAdvanced && !planData.features?.custom_segments) {
-        setErrorMsg(`Your current plan (${planData.plan.name}) does not support advanced targeting. Please upgrade to use this feature.`);
+      // Advanced targeting is gated on the advanced_segmentation feature,
+      // which is enabled only for Growth and Pro plans.
+      if (isAdvanced && !planData.features?.advanced_segmentation) {
+        setErrorMsg(
+          `Your current plan (${planData.plan.name}) does not support advanced targeting. Please upgrade to use this feature.`
+        );
         return; // Block change
       }
     }
@@ -548,7 +554,7 @@ export default function ConditionBuilder() {
     };
 
     try {
-      console.log("[SendCampaign] building payload", payload);
+      //console.log("[SendCampaign] building payload", payload);
       // --- AES-256-CBC helpers (browser) using passphrases (must match PHP) ---
       const bytesToBase64 = (bytes) =>
         btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(bytes))));
@@ -587,7 +593,7 @@ export default function ConditionBuilder() {
       const AES_IV_SALT = "CHANGE_ME_IV_SALT";
 
       const ciphertext = await encryptJson(payload, AES_PASSPHRASE, AES_IV_SALT);
-      console.log("[SendCampaign] ciphertext length", ciphertext?.length);
+      //console.log("[SendCampaign] ciphertext length", ciphertext?.length);
 
       const res = await fetch("/api/sendcamp", {
         method: "POST",
@@ -598,13 +604,13 @@ export default function ConditionBuilder() {
         body: JSON.stringify({ ciphertext }),
       });
 
-      console.log("[SendCampaign] response status", res.status);
+      //console.log("[SendCampaign] response status", res.status);
       const wire = await res.json();
-      console.log("[SendCampaign] response body", wire && wire.ciphertext ? `{ciphertext len=${wire.ciphertext.length}}` : wire);
+      //console.log("[SendCampaign] response body", wire && wire.ciphertext ? `{ciphertext len=${wire.ciphertext.length}}` : wire);
       let data = {};
       if (wire && wire.ciphertext) {
         data = await decryptToJson(wire.ciphertext, AES_PASSPHRASE, AES_IV_SALT);
-        console.log("[SendCampaign] decrypted response", data);
+        //console.log("[SendCampaign] decrypted response", data);
       } else {
         data = wire;
       }
@@ -622,7 +628,7 @@ export default function ConditionBuilder() {
         }, 1200); // Show success for 1.2s before navigating
       }
     } catch (error) {
-      console.error("[SendCampaign] error", error);
+      //console.error("[SendCampaign] error", error);
       setErrorMsg("Error scheduling campaign");
       setIsLoading(false); // Reset loading on error
     }

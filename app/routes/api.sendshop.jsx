@@ -5,7 +5,7 @@ export const action = async ({ request }) => {
 
     // Forward to Zingbot handler
     const response = await fetch(
-      "https://api.zingbot.io/push-notify/push-notify/shop_handler.php",
+      "https://int.pushnova.app/shop_handler.php",
       {
         method: "POST",
         headers: {

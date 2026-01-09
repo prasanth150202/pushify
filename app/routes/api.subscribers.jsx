@@ -13,7 +13,7 @@ export async function loader({ request }) {
 
         // Fetch subscriber count from PHP backend
         const response = await fetch(
-            `https://api.zingbot.io/push-notify/push-notify/subscribers_count.php?shop=${encodeURIComponent(
+            `https://int.pushnova.app/subscribers_count.php?shop=${encodeURIComponent(
                 shopDomain
             )}`
         );

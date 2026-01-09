@@ -3,11 +3,11 @@ import { authenticate } from "../shopify.server"; // your Shopify auth helper
 
 export const action = async ({ request }) => {
   try {
-    
+
     const { session } = await authenticate.admin(request);
     const shopDomain = session.shop;
 
-    
+
     const body = await request.json();
 
     console.log("Incoming push template payload:", { encrypted: !!body?.ciphertext, shop: shopDomain });
@@ -25,13 +25,13 @@ export const action = async ({ request }) => {
     } else {
       payload = {
         ...body,
-        shop: shopDomain, 
+        shop: shopDomain,
       };
     }
 
     console.log("Forwarding to campaigns.php with headers", headers, "payload keys", body?.ciphertext ? Object.keys({ ciphertext: body.ciphertext }) : Object.keys(payload || {}));
     const response = await fetch(
-      "https://api.zingbot.io/push-notify/push-notify/campaigns.php",
+      "https://int.pushnova.app/campaigns.php",
       {
         method: "POST",
         headers,
@@ -56,7 +56,7 @@ export const action = async ({ request }) => {
     }
 
     const wire = await response.json().catch(() => ({}));
-    console.log("Remote response body", wire && wire.ciphertext ? `{ciphertext len=${(wire.ciphertext||'').length}}` : wire);
+    console.log("Remote response body", wire && wire.ciphertext ? `{ciphertext len=${(wire.ciphertext || '').length}}` : wire);
     // If backend returns ciphertext, pass it through unchanged.
     if (wire && wire.ciphertext) {
       return json({ ciphertext: wire.ciphertext });

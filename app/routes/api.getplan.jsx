@@ -8,7 +8,7 @@ export async function loader({ request }) {
     try {
         // Fetch plan from PHP database
         const response = await fetch(
-            `https://api.zingbot.io/push-notify/push-notify/get_shop_plan.php?shop=${encodeURIComponent(shop)}`
+            `https://int.pushnova.app/get_shop_plan.php?shop=${encodeURIComponent(shop)}`
         );
 
         if (!response.ok) {

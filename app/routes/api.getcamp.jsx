@@ -39,7 +39,7 @@ export async function loader({ request }) {
 
     // --- Forward the request to PHP backend with shop domain ---
     const response = await fetch(
-      `https://api.zingbot.io/push-notify/push-notify/campaigns.php?shop=${encodeURIComponent(
+      `https://int.pushnova.app/campaigns.php?shop=${encodeURIComponent(
         shopDomain
       )}`
     );

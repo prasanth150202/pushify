@@ -15,7 +15,7 @@ export async function action({ request }) {
 
         // Forward to PHP API
         const response = await fetch(
-            "https://api.zingbot.io/push-notify/push-notify/get_audience_count.php",
+            "https://int.pushnova.app/get_audience_count.php",
             {
                 method: "POST",
                 headers: {

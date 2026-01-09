@@ -18,7 +18,7 @@ export const action = async ({ request }) => {
     };
 
     const response = await fetch(
-      "https://api.zingbot.io/push-notify/push-notify/customui.php",
+      "https://int.pushnova.app/customui.php",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,7 +52,7 @@ export const loader = async ({ request }) => {
     }
 
     const response = await fetch(
-      `https://api.zingbot.io/push-notify/push-notify/customui.php?shop_domain=${encodeURIComponent(
+      `https://int.pushnova.app/customui.php?shop_domain=${encodeURIComponent(
         shopDomain
       )}`
     );

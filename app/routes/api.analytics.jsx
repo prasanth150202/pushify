@@ -6,7 +6,7 @@ export async function loader({ request }) {
     const shop = session.shop;
 
     try {
-        const response = await fetch(`https://api.zingbot.io/push-notify/push-notify/analytics.php?shop=${shop}`);
+        const response = await fetch(`https://int.pushnova.app/analytics.php?shop=${shop}`);
 
         if (!response.ok) {
             throw new Error(`API responded with status: ${response.status}`);

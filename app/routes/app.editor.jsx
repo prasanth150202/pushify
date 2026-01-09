@@ -11,9 +11,17 @@ import {
   Thumbnail,
   ContextualSaveBar,
   Button,
+  Banner,
+  InlineStack,
 } from "@shopify/polaris";
+import { usePlanFeatures } from "../hooks/usePlanFeatures";
+import { UpgradeBanner } from "../components/UpgradePrompts";
 
 export default function PushTemplateEditor() {
+  // Plan feature checking
+  const { hasFeature, checkFeatureAccess, loading: planLoading } = usePlanFeatures();
+  const aiAccess = checkFeatureAccess('ai_content');
+
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [link, setLink] = useState("");
@@ -86,14 +94,14 @@ export default function PushTemplateEditor() {
       const AES_PASSPHRASE = "CHANGE_ME_STRONG_PASSPHRASE";
       const AES_IV_SALT = "CHANGE_ME_IV_SALT";
 
-      console.groupCollapsed("[SendTemplate] encrypt+send debug");
-      console.log("[SendTemplate] plaintext payload", payload);
+      //console.groupCollapsed("[SendTemplate] encrypt+send debug");
+      // console.log("[SendTemplate] plaintext payload", payload);
       const ciphertext = await encryptJson(payload, AES_PASSPHRASE, AES_IV_SALT);
       if (!ciphertext) {
         console.error("[SendTemplate] ciphertext empty");
         throw new Error("Encryption output empty");
       }
-      console.log("[SendTemplate] ciphertext length", ciphertext.length);
+      // console.log("[SendTemplate] ciphertext length", ciphertext.length);
 
       const res = await fetch("/api/sendtemp", {
         method: "POST",
@@ -101,25 +109,25 @@ export default function PushTemplateEditor() {
         body: JSON.stringify({ ciphertext }),
       });
 
-      console.log("[SendTemplate] response status", res.status);
+      // console.log("[SendTemplate] response status", res.status);
       if (res.ok) {
         const resJson = await res.json().catch(() => ({}));
-        console.log("[SendTemplate] success payload", resJson);
+        // console.log("[SendTemplate] success payload", resJson);
         setToastActive(true);
         setDirty(false);
       } else {
         const errorText = await res.text();
-        console.error("[SendTemplate] server rejected payload", {
-          status: res.status,
-          body: errorText,
-        });
+        //    console.error("[SendTemplate] server rejected payload", {
+        //   status: res.status,
+        //   body: errorText,
+        // });
         alert("Failed to save template: " + (errorText || res.status));
       }
     } catch (err) {
-      console.error("[SendTemplate] fatal error", err);
+      //console.error("[SendTemplate] fatal error", err);
       alert("Error saving template: " + err?.message);
     } finally {
-      console.groupEnd();
+      //console.groupEnd();
       setSaving(false);
     }
   };
@@ -133,7 +141,7 @@ export default function PushTemplateEditor() {
     setDirty(false);
     setSuggestion("");
   };
-  
+
   const handleAISuggest = async (field) => {
     const value = field === "title" ? title.trim() : body.trim();
 
@@ -164,12 +172,14 @@ export default function PushTemplateEditor() {
         setDirty(true);
       }
     } catch (err) {
-      console.log("AI Suggestion failed:", err);
+      // console.log("AI Suggestion failed:", err);
     }
   };
 
   // --- AI Typing Assistant (inline) ---
   useEffect(() => {
+    // Disable AI typing assistant if user doesn't have ai_content feature
+    if (!aiAccess.allowed) return;
     if (pauseSuggest) return; // paused after accepting suggestion
     if (!body.trim()) {
       setSuggestion("");
@@ -193,10 +203,10 @@ export default function PushTemplateEditor() {
           setSuggestion(words);
         }
       } catch (err) {
-        console.log("Typing assistant error:", err);
+        // console.log("Typing assistant error:", err);
       }
     }, 1000);
-  }, [body, pauseSuggest]); // <-- Add pauseSuggest to dependencies
+  }, [body, pauseSuggest, aiAccess.allowed]); // <-- Add aiAccess.allowed to dependencies
 
   const acceptSuggestion = () => {
     if (suggestion) {
@@ -266,7 +276,18 @@ export default function PushTemplateEditor() {
                   onChange={handleChange(setTitle)}
                   error={errors.title}
                 />
-                <Button onClick={() => handleAISuggest("title")}>AI Improve Title</Button>
+                {aiAccess.allowed ? (
+                  <Button onClick={() => handleAISuggest("title")}>✨ AI Improve Title</Button>
+                ) : (
+                  <div style={{ padding: '8px 12px', background: 'var(--p-color-bg-surface-secondary)', borderRadius: '8px', border: '1px dashed var(--p-color-border)' }}>
+                    <InlineStack gap="200" blockAlign="center">
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        🔒 AI content generation requires {aiAccess.requiredPlan} plan
+                      </Text>
+                      <Button url="/app/plan" size="slim" variant="plain">Upgrade</Button>
+                    </InlineStack>
+                  </div>
+                )}
 
                 {/* Inline typing assistant for Body */}
                 <div style={{ position: "relative", width: "100%" }}>
@@ -326,7 +347,18 @@ export default function PushTemplateEditor() {
                   </div>
                 </div>
 
-                <Button onClick={() => handleAISuggest("body")}>AI Improve Body</Button>
+                {aiAccess.allowed ? (
+                  <Button onClick={() => handleAISuggest("body")}>✨ AI Improve Body</Button>
+                ) : (
+                  <div style={{ padding: '8px 12px', background: 'var(--p-color-bg-surface-secondary)', borderRadius: '8px', border: '1px dashed var(--p-color-border)' }}>
+                    <InlineStack gap="200" blockAlign="center">
+                      <Text as="span" variant="bodySm" tone="subdued">
+                        🔒 AI content generation requires {aiAccess.requiredPlan} plan
+                      </Text>
+                      <Button url="/app/plan" size="slim" variant="plain">Upgrade</Button>
+                    </InlineStack>
+                  </div>
+                )}
 
                 <TextField
                   label="Icon Image URL"

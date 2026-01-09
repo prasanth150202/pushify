@@ -37,7 +37,7 @@ export async function loader({ request }) {
     };
 
     const res = await fetch(
-      `https://api.zingbot.io/push-notify/push-notify/templates.php?shopdomain=${shopDomain}`,
+      `https://int.pushnova.app/templates.php?shopdomain=${shopDomain}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -80,7 +80,7 @@ export async function action({ request }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         },
-        externalUrl: "https://api.zingbot.io/push-notify/push-notify/templates.php",
+        externalUrl: "https://int.pushnova.app/templates.php",
         externalInit: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -102,7 +102,7 @@ export async function action({ request }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         },
-        externalUrl: "https://api.zingbot.io/push-notify/push-notify/templates.php",
+        externalUrl: "https://int.pushnova.app/templates.php",
         externalInit: {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },

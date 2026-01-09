@@ -7,8 +7,8 @@ export const action = async ({ request }) => {
     // Authenticate Shopify Admin / Embedded App
     // ----------------------------
     const { session } = await authenticate.admin(request);
-    const shopDomain = session.shop;   
- 
+    const shopDomain = session.shop;
+
     // ----------------------------
     // Parse JSON body
     // ----------------------------
@@ -41,7 +41,7 @@ export const action = async ({ request }) => {
     // Send to PHP endpoint
     // ----------------------------
     const response = await fetch(
-      "https://api.zingbot.io/push-notify/push-notify/templates.php",
+      "https://int.pushnova.app/templates.php",
       {
         method: "POST",
         headers,

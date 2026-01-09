@@ -80,8 +80,8 @@ export default function Dashboard() {
 
   // Filtered templates
   const filteredTemplates = templates.filter((tpl) =>
-  (tpl?.title || "").toLowerCase().includes((queryValue || "").toLowerCase())
-);
+    (tpl?.title || "").toLowerCase().includes((queryValue || "").toLowerCase())
+  );
 
 
   // --- Delete Action ---
@@ -128,7 +128,7 @@ export default function Dashboard() {
   );
 
   return (
-    <Page title="Push Notifications Dashboard">
+    <Page title="Templates Library">
       {/* Search + Actions */}
       <Card sectioned>
         <InlineStack gap="400" align="space-between" blockAlign="center">
@@ -175,12 +175,12 @@ export default function Dashboard() {
                 </Text>
               </IndexTable.Cell>
               <IndexTable.Cell>
-  <Link to={`/app/additional?temp=${tpl.id}`}>
-    <Button primary size="slim">
-      Send campaign
-    </Button>
-  </Link>
-</IndexTable.Cell>
+                <Link to={`/app/additional?temp=${tpl.id}`}>
+                  <Button primary size="slim">
+                    Send campaign
+                  </Button>
+                </Link>
+              </IndexTable.Cell>
 
             </IndexTable.Row>
           ))}

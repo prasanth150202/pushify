@@ -45,12 +45,12 @@ export const loader = async ({ request }) => {
     body: JSON.stringify(shopInfo),
   });
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: shop.myshopifyDomain };
 };
 
 
 export default function App() {
-  const { apiKey } = useLoaderData();
+  const { apiKey, shop } = useLoaderData();
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
@@ -64,7 +64,7 @@ export default function App() {
         <Link to="/app/customui">Customize UI</Link>
         <Link to="/app/plan">Plans</Link>
       </NavMenu>
-      <Outlet />
+      <Outlet context={{ shop }} />
     </AppProvider>
   );
 }
