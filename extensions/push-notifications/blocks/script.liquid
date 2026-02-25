@@ -73,9 +73,7 @@
     // === Utility Functions ===
     async function fetchCustomUI(shopDomain) {
       try {
-        const res = await fetch(
-          `https://int.pushnova.app/customui.php?shop_domain=${shopDomain}`
-        );
+        const res = await fetch(`https://int.pushnova.app/customui.php?shop_domain=${shopDomain}`);
         return await res.json();
       } catch (err) {
         debug('fetchCustomUI failed:', err);

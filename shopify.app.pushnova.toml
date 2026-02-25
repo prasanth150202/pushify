@@ -6,10 +6,10 @@ application_url = "https://pushnova.fly.dev/"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = false
+automatically_update_urls_on_dev = true
 
 [webhooks]
-api_version = "2026-01"
+api_version = "2026-01"              mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
 
 [[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
@@ -24,7 +24,17 @@ topics = ["app/uninstalled"]
 uri = "/webhooks/app/uninstalled"
 
 
+[[webhooks.subscriptions]]
+topics = ["orders/create"]
+uri = "https://int.pushnova.app/orders.php"
+
+# checkouts/create → Google Pub/Sub (same topic or a different one if you prefer)
+[[webhooks.subscriptions]]
+topics = ["checkouts/create"]
+uri = "https://int.pushnova.app/checkout.php"
+
 [access_scopes]
+
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_app_proxy,write_app_proxy,read_checkouts,read_orders,write_products,read_themes,"
 optional_scopes = [ ]

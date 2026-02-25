@@ -63,7 +63,7 @@ const templatePresets = {
 };
 
 export default function PushCustomizer() {
-  const [selected, setSelected] = useState(true); // Knob state
+  const [selected, setSelected] = useState(false); // Knob state
   const [title, setTitle] = useState("Stay updated!");
   const [body, setBody] = useState("Allow notifications to get the latest offers.");
   const [primaryText, setPrimaryText] = useState("Allow");

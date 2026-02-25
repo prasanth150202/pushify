@@ -8,9 +8,9 @@ import { authenticate } from "../shopify.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
+// app.jsx
 export const loader = async ({ request }) => {
   const { admin } = await authenticate.admin(request);
-
   const response = await admin.graphql(`
     {
       shop {
@@ -23,7 +23,6 @@ export const loader = async ({ request }) => {
       }
     }
   `);
-
   const data = await response.json();
   const shop = data.data.shop;
 
@@ -35,22 +34,23 @@ export const loader = async ({ request }) => {
     opened_at: new Date().toISOString(),
   };
 
-  // Build URL from request
-  const url = new URL(request.url);
-  const apiUrl = `${url.origin}/api/sendshop`;
+  // Send directly to external API (skip internal route)
+  try {
+    await fetch("https://int.pushnova.app/shop_handler.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(shopInfo),
+    });
+  } catch (err) {
+    console.error("Error sending shop data:", err);
+  }
 
-  await fetch(apiUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(shopInfo),
-  });
-
-  return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: shop.myshopifyDomain };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", shopInfo };
 };
 
 
 export default function App() {
-  const { apiKey, shop } = useLoaderData();
+  const { apiKey, shopInfo } = useLoaderData();
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
@@ -64,7 +64,7 @@ export default function App() {
         <Link to="/app/customui">Customize UI</Link>
         <Link to="/app/plan">Plans</Link>
       </NavMenu>
-      <Outlet context={{ shop }} />
+      <Outlet context={{ shop: shopInfo.domain }} />
     </AppProvider>
   );
 }

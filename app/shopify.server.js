@@ -10,10 +10,10 @@ import { restResources } from "@shopify/shopify-api/rest/admin/2023-10";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
-  apiVersion: ApiVersion.January25,
-  scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  apiSecretKey: process.env.SHOPIFY_API_SECRET,
+  apiVersion: ApiVersion.October23,
+  scopes: process.env.SCOPES.split(","),
+  appUrl: process.env.SHOPIFY_APP_URL,
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   restResources,
