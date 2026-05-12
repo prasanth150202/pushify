@@ -329,17 +329,15 @@ export default function ConditionBuilder() {
 
   const updateCondition = (index, key, newValue) => {
     // Check plan features for targeting
-    if (key === "type" && planData) {
+    if (key === "type" && planData && !checkingPlan) {
       const basicTypes = ["all_users", "all_carts"];
       const isAdvanced = !basicTypes.includes(newValue);
 
-      // Advanced targeting is gated on the advanced_segmentation feature,
-      // which is enabled only for Growth and Pro plans.
       if (isAdvanced && !planData.features?.advanced_segmentation) {
         setErrorMsg(
-          `Your current plan (${planData.plan.name}) does not support advanced targeting. Please upgrade to use this feature.`
+          `Your current plan (${planData.plan?.name || 'Free'}) does not support advanced targeting. Please upgrade to use this feature.`
         );
-        return; // Block change
+        return;
       }
     }
 
@@ -355,7 +353,7 @@ export default function ConditionBuilder() {
     }
     updated[index][key] = newValue;
     setConditions(updated);
-    setErrorMsg(""); // Clear error on successful update
+    setErrorMsg("");
   };
 
   const toggleDateRange = (index) => {
@@ -497,7 +495,7 @@ export default function ConditionBuilder() {
 
     // Check limits
     if (planData) {
-      const dailyLimit = planData.limits?.daily_push_limit || 100;
+      const dailyLimit = planData.plan?.daily_push_limit ?? planData.limits?.daily_push_limit ?? 100;
       const remaining = planData.usage?.remaining ?? dailyLimit;
 
       // Check user entered limit
@@ -511,6 +509,8 @@ export default function ConditionBuilder() {
         setErrorMsg(`You have reached your daily push limit of ${dailyLimit}. Please upgrade or wait until tomorrow.`);
         return;
       }
+    } else if (checkingPlan) {
+      // Still loading plan — don't block the send, plan check will happen server-side
     }
 
     setErrorMsg(""); // clear error

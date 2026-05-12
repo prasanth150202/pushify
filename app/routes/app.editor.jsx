@@ -13,6 +13,7 @@ import {
   Button,
   Banner,
   InlineStack,
+  Spinner,
 } from "@shopify/polaris";
 import { usePlanFeatures } from "../hooks/usePlanFeatures";
 import { UpgradeBanner } from "../components/UpgradePrompts";
@@ -22,6 +23,7 @@ export default function PushTemplateEditor() {
   const { hasFeature, checkFeatureAccess, loading: planLoading } = usePlanFeatures();
   const aiAccess = checkFeatureAccess('ai_content');
 
+  const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [link, setLink] = useState("");
@@ -29,9 +31,10 @@ export default function PushTemplateEditor() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toastActive, setToastActive] = useState(false);
+  const [toastMsg, setToastMsg] = useState("Template saved successfully");
   const [errors, setErrors] = useState({});
   const [suggestion, setSuggestion] = useState("");
-  const [pauseSuggest, setPauseSuggest] = useState(false); // <-- Add this line
+  const [pauseSuggest, setPauseSuggest] = useState(false);
   const [bodyHistory, setBodyHistory] = useState([""]);
   const [bodyIndex, setBodyIndex] = useState(0);
   const debounceRef = useRef(null);
@@ -67,7 +70,7 @@ export default function PushTemplateEditor() {
   const handleSave = async () => {
     if (!validateFields()) return;
     setSaving(true);
-    const payload = { title, body, link, icon: iconUrl || null };
+    const payload = { name: name.trim() || null, title, body, link, icon: iconUrl || null };
 
     try {
       // AES-256-CBC helpers (browser) using passphrases (must match PHP)
@@ -112,7 +115,7 @@ export default function PushTemplateEditor() {
       // console.log("[SendTemplate] response status", res.status);
       if (res.ok) {
         const resJson = await res.json().catch(() => ({}));
-        // console.log("[SendTemplate] success payload", resJson);
+        setToastMsg("Template saved successfully");
         setToastActive(true);
         setDirty(false);
       } else {
@@ -133,6 +136,7 @@ export default function PushTemplateEditor() {
   };
 
   const handleDiscard = () => {
+    setName("");
     setTitle("");
     setBody("");
     setLink("");
@@ -140,6 +144,34 @@ export default function PushTemplateEditor() {
     setErrors({});
     setDirty(false);
     setSuggestion("");
+  };
+
+  const handleSendTest = async () => {
+    if (!title.trim() || !body.trim()) {
+      alert("Please enter a title and body before sending a test notification.");
+      return;
+    }
+    setSendingTest(true);
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shop = urlParams.get("shop") || "";
+      const res = await fetch("/api/send-test-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shop, title, body, link }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMsg("Test notification sent to your browser!");
+        setToastActive(true);
+      } else {
+        alert("Test failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Test notification error: " + err.message);
+    } finally {
+      setSendingTest(false);
+    }
   };
 
   const handleAISuggest = async (field) => {
@@ -271,12 +303,21 @@ export default function PushTemplateEditor() {
             <Card title="Template Editor" sectioned>
               <BlockStack gap="300">
                 <TextField
+                  label="Template Name (optional)"
+                  value={name}
+                  onChange={handleChange(setName)}
+                  placeholder="e.g. Summer Sale Welcome"
+                  helpText="A friendly name to identify this template in your library"
+                />
+                <TextField
                   label="Title"
                   value={title}
                   onChange={handleChange(setTitle)}
                   error={errors.title}
                 />
-                {aiAccess.allowed ? (
+                {planLoading ? (
+                  <div style={{ padding: '8px 0' }}><Spinner size="small" /></div>
+                ) : aiAccess.allowed ? (
                   <Button onClick={() => handleAISuggest("title")}>✨ AI Improve Title</Button>
                 ) : (
                   <div style={{ padding: '8px 12px', background: 'var(--p-color-bg-surface-secondary)', borderRadius: '8px', border: '1px dashed var(--p-color-border)' }}>
@@ -347,7 +388,9 @@ export default function PushTemplateEditor() {
                   </div>
                 </div>
 
-                {aiAccess.allowed ? (
+                {planLoading ? (
+                  <div style={{ padding: '8px 0' }}><Spinner size="small" /></div>
+                ) : aiAccess.allowed ? (
                   <Button onClick={() => handleAISuggest("body")}>✨ AI Improve Body</Button>
                 ) : (
                   <div style={{ padding: '8px 12px', background: 'var(--p-color-bg-surface-secondary)', borderRadius: '8px', border: '1px dashed var(--p-color-border)' }}>
@@ -378,7 +421,7 @@ export default function PushTemplateEditor() {
                   error={errors.link}
                 />
 
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <Button onClick={handlePrevBody} disabled={bodyIndex === 0}>
                     ◀ Prev
                   </Button>
@@ -388,6 +431,13 @@ export default function PushTemplateEditor() {
                   <span style={{ fontSize: "12px", color: "#888" }}>
                     {bodyIndex + 1} / {bodyHistory.length}
                   </span>
+                  <Button
+                    onClick={handleSendTest}
+                    loading={sendingTest}
+                    variant="secondary"
+                  >
+                    Send Test Notification
+                  </Button>
                 </div>
               </BlockStack>
             </Card>
@@ -433,7 +483,7 @@ export default function PushTemplateEditor() {
 
         {toastActive && (
           <Toast
-            content="Template saved successfully"
+            content={toastMsg}
             onDismiss={() => setToastActive(false)}
           />
         )}

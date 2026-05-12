@@ -92,6 +92,20 @@ export async function action({ request }) {
       return json(result, { status });
     }
 
+    if (method === "PUT") {
+      const body = await request.json();
+      body.shop_domain = shopDomain;
+
+      const res = await fetch("https://int.pushnova.app/templates.php", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      return json(data, { status: res.ok ? 200 : res.status });
+    }
+
     if (method === "DELETE") {
       const body = await request.json();
 

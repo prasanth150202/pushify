@@ -1,5 +1,6 @@
 // app.jsx
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { useEffect } from "react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
@@ -52,6 +53,13 @@ export const loader = async ({ request }) => {
 export default function App() {
   const { apiKey, shopInfo } = useLoaderData();
 
+  // Keepalive: ping the server every 60s to prevent idle timeouts
+  useEffect(() => {
+    const ping = () => fetch("/api/ping").catch(() => {});
+    const interval = setInterval(ping, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
@@ -59,6 +67,7 @@ export default function App() {
           Home
         </Link>
         <Link to="/app/additional">Campaign Builder</Link>
+        <Link to="/app/automations">Automations</Link>
         <Link to="/app/editor">Templates Creation</Link>
         <Link to="/app/templateslib">Templates Library</Link>
         <Link to="/app/customui">Customize UI</Link>
